@@ -537,6 +537,85 @@ class TestGetIndexer:
         tm.assert_index_equal(result, expected)
 
 
+@pytest.mark.parametrize("axis", [0, 1])
+def test_reindex_overlapping_exact_intervals(axis):
+    # GH#72070: overlapping point lookup does not make interval labels duplicate.
+    index = pd.interval_range(0, periods=3, freq=1, closed="both", name="bins")
+    frame = pd.DataFrame({"value": [10, 20, 30]}, index=index)
+    target = index.take([2, 0, 2])
+    expected = frame.iloc[[2, 0, 2]]
+    if axis == 1:
+        frame, expected = frame.T, expected.T
+    result = frame.reindex(target, axis=axis)
+    tm.assert_frame_equal(result, expected)
+
+
+def test_reindex_overlapping_ambiguous_points():
+    index = pd.IntervalIndex.from_tuples([(0, 2), (1, 3)])
+    frame = pd.DataFrame({"value": [10, 20]}, index=index)
+    msg = "cannot handle overlapping indices"
+    with pytest.raises(InvalidIndexError, match=msg):
+        frame.reindex([1.5])
+    with pytest.raises(InvalidIndexError, match=msg):
+        frame.reindex(pd.Index([index[0], 1.5], dtype=object))
+
+    result = frame.reindex([0.5, 2.5, 4.0])
+    expected = pd.DataFrame({"value": [10.0, 20.0, np.nan]}, index=[0.5, 2.5, 4.0])
+    tm.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    "kwargs, error, msg",
+    [
+        (
+            {"method": "pad"},
+            NotImplementedError,
+            "not yet implemented for IntervalIndex",
+        ),
+        (
+            {"method": "nearest"},
+            NotImplementedError,
+            "not yet implemented for IntervalIndex",
+        ),
+        ({"limit": 1}, ValueError, "limit argument only valid"),
+        ({"tolerance": 1}, ValueError, "tolerance argument only valid"),
+    ],
+)
+def test_reindex_overlapping_indexing_options(kwargs, error, msg):
+    index = pd.IntervalIndex.from_tuples([(0, 2), (1, 3)])
+    frame = pd.DataFrame({"value": [10, 20]}, index=index)
+    target = pd.IntervalIndex.from_tuples([(0, 2), (10, 20)])
+    for obj in [index, frame]:
+        with pytest.raises(error, match=msg):
+            obj.reindex(target, **kwargs)
+
+
+@pytest.mark.parametrize("duplicate", [False, True])
+def test_get_indexer_non_unique_shared_endpoints(closed, duplicate):
+    index = pd.IntervalIndex.from_tuples(
+        [(0, 2), (0, 3), (1, 3), np.nan], closed=closed
+    )
+    if duplicate:
+        index = index.append(index[[0, 3]])
+    target = pd.IntervalIndex.from_tuples([(0, 2), (0, 4), np.nan], closed=closed)
+    result, missing = index.get_indexer_non_unique(target)
+    expected = [0, 4, -1, 3, 5] if duplicate else [0, -1, 3]
+    tm.assert_numpy_array_equal(result, np.array(expected, dtype=np.intp))
+    tm.assert_numpy_array_equal(missing, np.array([1], dtype=np.intp))
+    for empty_target in [target[:0], pd.Index([], dtype=object)]:
+        result, missing = index.get_indexer_non_unique(empty_target)
+        tm.assert_numpy_array_equal(result, np.array([], dtype=np.intp))
+        tm.assert_numpy_array_equal(missing, np.array([], dtype=np.intp))
+
+
+def test_get_indexer_duplicate_empty_intervals(closed):
+    index = pd.IntervalIndex.from_tuples([(1, 1), (1, 1)], closed=closed)
+    with pytest.raises(InvalidIndexError, match="cannot handle overlapping indices"):
+        index.get_indexer(index[:1])
+    result = index.get_indexer_for(index[:1])
+    tm.assert_numpy_array_equal(result, np.array([0, 1], dtype=np.intp))
+
+
 def test_get_indexer_scalars_all_closed(closed):
     # GH#47614 - boundary behavior for each closed value
     # Use gaps between all intervals to avoid overlap with closed="both"

@@ -1192,7 +1192,7 @@ class IntervalIndex(ExtensionIndex):
             if self.left.is_unique and self.right.is_unique:
                 indexer = self._get_indexer_unique_sides(target)
             else:
-                indexer = self._get_indexer_pointwise(target)[0]
+                indexer = self._multiindex.get_indexer(target._multiindex)
 
         elif not (is_object_dtype(target.dtype) or is_string_dtype(target.dtype)):
             # homogeneous scalar index
@@ -1281,7 +1281,9 @@ class IntervalIndex(ExtensionIndex):
                 indexer = self._get_indexer_unique_sides(target)
                 missing = (indexer == -1).nonzero()[0]
             else:
-                return self._get_indexer_pointwise(target)
+                # Exact interval labels are pairs of endpoints. Hash the pairs
+                # rather than scanning every interval once per target label.
+                return self._multiindex.get_indexer_non_unique(target._multiindex)
 
         elif is_object_dtype(target.dtype) or not self._should_partial_index(target):
             # target might contain intervals: defer elementwise to get_loc
@@ -1368,12 +1370,15 @@ class IntervalIndex(ExtensionIndex):
 
             indexer.append(locs)
 
-        concatenated_indexer = np.concatenate(indexer)
+        concatenated_indexer = (
+            np.concatenate(indexer) if indexer else np.array([], dtype=np.intp)
+        )
         return ensure_platform_int(concatenated_indexer), ensure_platform_int(missing)
 
     @cache_readonly
     def _index_as_unique(self) -> bool:
-        return not self.is_overlapping and self._engine._na_count < 2
+        # Duplicate empty intervals do not overlap but are not unique labels.
+        return self.is_unique and not self.is_overlapping
 
     _requires_unique_msg = (
         "cannot handle overlapping indices; use IntervalIndex.get_indexer_non_unique"

@@ -4330,7 +4330,7 @@ class Index(IndexOpsMixin, PandasObject):
         ValueError if its a duplicate axis
         """
         # trying to reindex on an axis with duplicates
-        if not self._index_as_unique and len(indexer):
+        if not self.is_unique and len(indexer):
             raise ValueError("cannot reindex on an axis with duplicate labels")
 
     def reindex(
@@ -4446,7 +4446,12 @@ class Index(IndexOpsMixin, PandasObject):
             # GH#42568
             raise ValueError("cannot reindex on an axis with duplicate labels")
         else:
+            self._check_indexing_method(method, limit, tolerance)
             indexer, _ = self.get_indexer_non_unique(target)
+            if len(indexer) != len(target):
+                # IntervalIndex labels can be unique while a point is contained
+                # in more than one interval. Reindex requires one row per label.
+                raise InvalidIndexError(self._requires_unique_msg)
 
         target = self._wrap_reindex_result(target, indexer, preserve_names)  # type: ignore[arg-type]
         return target, indexer

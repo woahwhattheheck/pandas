@@ -374,6 +374,23 @@ class IntervalIndexing:
         monotonic.loc[80000:]
 
 
+class IntervalSharedEndpointIndexing:
+    params = [1000, 10000]
+    param_names = ["n"]
+
+    def setup(self, n):
+        left = np.repeat(np.arange(n // 2), 2)
+        right = left + np.tile([1, 2], n // 2)
+        self.index = IntervalIndex.from_arrays(left, right, closed="both")
+        self.target = self.index[::-1]
+
+    def time_get_indexer_non_unique(self, n):
+        self.index.get_indexer_non_unique(self.target)
+
+    def peakmem_get_indexer_non_unique(self, n):
+        self.index.get_indexer_non_unique(self.target)
+
+
 class DatetimeIndexIndexing:
     def setup(self):
         dti = date_range("2016-01-01", periods=10000, tz="US/Pacific")

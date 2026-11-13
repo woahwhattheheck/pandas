@@ -284,6 +284,8 @@ Interval
 
 Indexing
 ^^^^^^^^
+- Bug in :meth:`DataFrame.reindex` and :meth:`Series.reindex` rejecting unique, overlapping :class:`IntervalIndex` labels as duplicates, and in reindexing by a point contained in multiple intervals producing an indexer longer than its target (:issue:`72070`)
+- Bug in exact :class:`IntervalIndex` lookup treating duplicated empty intervals as unique labels; exact matching of intervals with shared endpoints now uses endpoint pairs instead of repeated full-index scans (:issue:`72070`)
 - Bug in :class:`Index` where creating or converting to numpy string dtypes would raise ``NotImplementedError`` now raises ``TypeError`` (:issue:`50127`)
 - Bug in :meth:`DataFrame.__setitem__` silently corrupting the :class:`DataFrame` when the key matched several columns and ``value`` was a timezone-aware ``datetime64`` or ``period`` scalar, or a one-dimensional :class:`Series` of either dtype; it now broadcasts across the matched columns as the other dtypes already did (:issue:`71078`)
 - Bug in :meth:`DataFrame.__setitem__` silently corrupting the :class:`DataFrame` when the key matched several unique columns, e.g. a partial date string on :class:`DatetimeIndex` columns; ``value`` now broadcasts across them (:issue:`71098`)
